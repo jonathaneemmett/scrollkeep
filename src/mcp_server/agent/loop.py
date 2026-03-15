@@ -36,9 +36,9 @@ async def agent_loop(
 
         if not response.is_tool_use:
             text = response.text or ""
-            assistant_msg = {"role": "assistant", "content": text}
-            messages.append(assistant_msg)
-            session.append(assistant_msg)
+            text_msg = {"role": "assistant", "content": text}
+            messages.append(text_msg)
+            session.append(text_msg)
             return text
 
         # Build assistant message with tool calls

@@ -6,7 +6,7 @@ from anthropic.types import TextBlock, ToolUseBlock
 from mcp_server.llm.anthropic import AnthropicProvider
 from mcp_server.llm.base import LLMProvider
 from mcp_server.llm.openai import OpenAIProvider
-from mcp_server.llm.types import LLMResponse
+from mcp_server.llm.types import LLMResponse, ToolSchema
 
 
 def test_anthropic_satisfies_protocol() -> None:
@@ -87,7 +87,7 @@ async def test_openai_complete() -> None:
 # --- complete_with_tools tests ---
 
 
-DUMMY_TOOLS = [
+DUMMY_TOOLS: list[ToolSchema] = [
     {
         "name": "test_tool",
         "description": "A test tool",

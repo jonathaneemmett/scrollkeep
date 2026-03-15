@@ -59,8 +59,8 @@ class OpenAIProvider:
                 tool_calls.append(
                     ToolCall(
                         id=tc.id,
-                        name=tc.function.name,
-                        arguments=json.loads(tc.function.arguments),
+                        name=tc.function.name,  # type: ignore[union-attr]
+                        arguments=json.loads(tc.function.arguments),  # type: ignore[union-attr]
                     )
                 )
 

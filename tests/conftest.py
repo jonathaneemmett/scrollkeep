@@ -4,5 +4,5 @@ from mcp_server.server import mcp
 
 
 @pytest.fixture
-def server():
+def server() -> object:
     return mcp

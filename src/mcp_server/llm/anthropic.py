@@ -51,7 +51,7 @@ class AnthropicProvider:
         if system:
             kwargs["system"] = system
 
-        response = await self.client.messages.create(**kwargs)  # type: ignore[arg-type]
+        response = await self.client.messages.create(**kwargs)
 
         text_parts: list[str] = []
         tool_calls: list[ToolCall] = []
