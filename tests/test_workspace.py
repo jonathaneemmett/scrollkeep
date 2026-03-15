@@ -35,7 +35,7 @@ def test_system_prompt_includes_memory(tmp_path: Path) -> None:
 def test_system_prompt_skips_empty_memory(tmp_path: Path) -> None:
     ws = Workspace(path=str(tmp_path / "ws"))
     prompt = ws.system_prompt()
-    assert "# Memory" not in prompt
+    assert "# Remembered Notes" not in prompt
 
 
 def test_memory_path(tmp_path: Path) -> None:
