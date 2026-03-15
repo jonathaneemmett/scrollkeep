@@ -21,6 +21,9 @@ dev = [
     "mypy",
 ]
 
+[project.scripts]
+scrollkeep = "mcp_server.cli:main"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/mcp_server"]
 

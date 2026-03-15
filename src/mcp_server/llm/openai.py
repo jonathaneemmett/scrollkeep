@@ -1,4 +1,9 @@
+import json
+from typing import Any
+
 import openai
+
+from mcp_server.llm.types import LLMResponse, ToolCall, ToolSchema
 
 
 class OpenAIProvider:
@@ -16,3 +21,85 @@ class OpenAIProvider:
         if content is None:
             return ""
         return content
+
+    async def complete_with_tools(
+        self,
+        messages: list[dict[str, Any]],
+        model: str,
+        tools: list[ToolSchema],
+        system: str = "",
+    ) -> LLMResponse:
+        openai_tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": t["name"],
+                    "description": t["description"],
+                    "parameters": t["parameters"],
+                },
+            }
+            for t in tools
+        ]
+
+        openai_messages = self._convert_messages(messages, system)
+
+        response = await self._client.chat.completions.create(
+            model=model,
+            messages=openai_messages,  # type: ignore[arg-type]
+            tools=openai_tools,  # type: ignore[arg-type]
+        )
+
+        choice = response.choices[0].message
+
+        text = choice.content
+        tool_calls: list[ToolCall] = []
+
+        if choice.tool_calls:
+            for tc in choice.tool_calls:
+                tool_calls.append(
+                    ToolCall(
+                        id=tc.id,
+                        name=tc.function.name,
+                        arguments=json.loads(tc.function.arguments),
+                    )
+                )
+
+        return LLMResponse(text=text, tool_calls=tool_calls)
+
+    @staticmethod
+    def _convert_messages(
+        messages: list[dict[str, Any]], system: str
+    ) -> list[dict[str, Any]]:
+        """Convert normalized messages to OpenAI format."""
+        result: list[dict[str, Any]] = []
+        if system:
+            result.append({"role": "system", "content": system})
+
+        for msg in messages:
+            role = msg["role"]
+            if role == "tool_result":
+                result.append({
+                    "role": "tool",
+                    "tool_call_id": msg["tool_call_id"],
+                    "content": msg["content"],
+                })
+            elif role == "assistant" and "tool_calls" in msg:
+                openai_msg: dict[str, Any] = {
+                    "role": "assistant",
+                    "content": msg.get("text"),
+                    "tool_calls": [
+                        {
+                            "id": tc["id"],
+                            "type": "function",
+                            "function": {
+                                "name": tc["name"],
+                                "arguments": json.dumps(tc["arguments"]),
+                            },
+                        }
+                        for tc in msg["tool_calls"]
+                    ],
+                }
+                result.append(openai_msg)
+            else:
+                result.append({"role": role, "content": msg["content"]})
+        return result

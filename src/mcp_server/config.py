@@ -8,7 +8,10 @@ class Settings(BaseSettings):
     anthropic_api_key: SecretStr
     openai_api_key: SecretStr | None = None
     default_provider: str = "anthropic"
-
+    default_provider: str = "anthropic"
+    default_model: str = "claude-sonnet-4-20250514"
+    workspace_dir: str = "~/.scrollkeep"
+      
     model_config = SettingsConfigDict(env_file=".env")
 
 
