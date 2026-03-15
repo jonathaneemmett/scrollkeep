@@ -1,9 +1,13 @@
 from mcp.server.fastmcp import FastMCP
 
-from mcp_server.llm import get_provider
+from mcp_server.llm import LLMProvider, get_provider
 
 mcp = FastMCP("mcp-server")
-llm = get_provider()
+
+
+def get_llm() -> LLMProvider:
+    return get_provider()
+
 
 def main() -> None:
     mcp.run()
