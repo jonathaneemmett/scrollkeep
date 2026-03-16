@@ -107,14 +107,48 @@ async def repl(
         await mcp_manager.close()
 
 
+def _update() -> None:
+    import shutil
+    import subprocess
+
+    console.print("[bold]Updating Scrollkeep...[/bold]")
+    pipx = shutil.which("pipx")
+    if pipx:
+        result = subprocess.run(
+            [pipx, "reinstall", "mcp-server"],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            console.print("[green]Updated successfully.[/green]")
+        else:
+            console.print(f"[red]Update failed:[/red]\n{result.stderr}")
+    else:
+        console.print(
+            "[red]pipx not found.[/red] "
+            "Run: pip install pipx && pipx reinstall mcp-server"
+        )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Scrollkeep AI assistant")
+    parser.add_argument(
+        "command", nargs="?", default=None, help="Subcommand (e.g. update)"
+    )
     parser.add_argument("--model", "-m", help="Override the default model")
     parser.add_argument("--provider", "-p", help="Override the default provider")
     parser.add_argument(
         "--new", "-n", action="store_true", help="Start a new session"
     )
     args = parser.parse_args()
+
+    if args.command == "update":
+        _update()
+        return
+
+    if args.command is not None:
+        console.print(f"[red]Unknown command: {args.command}[/red]")
+        sys.exit(1)
 
     try:
         asyncio.run(

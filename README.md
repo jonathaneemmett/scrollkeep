@@ -22,6 +22,12 @@ pip install -e ".[dev]"
 
 With the dev install, run via `.venv/bin/scrollkeep` or activate the venv first.
 
+**Updating** — code changes are picked up automatically (editable install). If dependencies change:
+
+```bash
+scrollkeep update
+```
+
 ## Configuration
 
 Copy the example env file and add your API keys:
