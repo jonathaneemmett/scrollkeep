@@ -8,7 +8,7 @@ from mcp_server.agent.workspace import Workspace
 def test_creates_default_files(tmp_path: Path) -> None:
     ws = Workspace(path=str(tmp_path / "ws"))
     assert (ws.root / "SOUL.md").exists()
-    assert (ws.root / "MEMORY.md").exists()
+    assert ws.memory_dir.exists()
 
 
 def test_does_not_overwrite_existing(tmp_path: Path) -> None:
@@ -25,11 +25,16 @@ def test_system_prompt_includes_soul(tmp_path: Path) -> None:
     assert "Scrollkeep" in prompt
 
 
-def test_system_prompt_includes_memory(tmp_path: Path) -> None:
+def test_system_prompt_includes_memories(tmp_path: Path) -> None:
     ws = Workspace(path=str(tmp_path / "ws"))
-    ws.memory_path.write_text("Remember: user likes cats")
+    mem = ws.memory_dir / "test.md"
+    mem.write_text(
+        "---\ntitle: favorite color\ntags: prefs\n"
+        "date: 2026-01-01\n---\n\nblue"
+    )
     prompt = ws.system_prompt()
-    assert "user likes cats" in prompt
+    assert "favorite color" in prompt
+    assert "blue" in prompt
 
 
 def test_system_prompt_skips_empty_memory(tmp_path: Path) -> None:
@@ -38,6 +43,7 @@ def test_system_prompt_skips_empty_memory(tmp_path: Path) -> None:
     assert "# Remembered Notes" not in prompt
 
 
-def test_memory_path(tmp_path: Path) -> None:
+def test_memory_dir(tmp_path: Path) -> None:
     ws = Workspace(path=str(tmp_path / "ws"))
-    assert ws.memory_path == ws.root / "MEMORY.md"
+    assert ws.memory_dir == ws.root / "memory"
+    assert ws.memory_dir.is_dir()

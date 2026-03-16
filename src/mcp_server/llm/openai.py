@@ -98,7 +98,7 @@ class OpenAIProvider:
         text_parts: list[str] = []
         tool_calls_by_index: dict[int, dict[str, Any]] = {}
 
-        async for chunk in stream:
+        async for chunk in stream:  # type: ignore[union-attr]
             delta = chunk.choices[0].delta if chunk.choices else None
             if delta is None:
                 continue

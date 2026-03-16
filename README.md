@@ -1,6 +1,6 @@
 # Scrollkeep
 
-A self-hosted personal AI assistant with a CLI chat interface. Scrollkeep runs a ReAct-loop agent that can execute shell commands, read/write files, and remember things across sessions. Also functions as a Model Context Protocol (MCP) server.
+A self-hosted personal AI assistant with a CLI chat interface. Scrollkeep runs a ReAct-loop agent that can execute shell commands, read/write files, search the web, remember things across sessions, connect to MCP servers, and delegate subtasks to sub-agents. Also functions as a Model Context Protocol (MCP) server.
 
 ## Setup
 
@@ -29,15 +29,47 @@ cp .env.example .env
 ## Chat (CLI Agent)
 
 ```bash
-scrollkeep
+scrollkeep                          # resume latest session
+scrollkeep --new                    # start fresh session
+scrollkeep --model gpt-4o --provider openai  # use OpenAI
+scrollkeep -m claude-sonnet-4-20250514 -n    # short flags
 ```
 
-This launches an interactive REPL. The agent can:
+### REPL Commands
 
-- **Run shell commands** — "list the files in this directory"
-- **Read/write/edit files** — "create a file called notes.txt with today's date"
-- **Remember things** — writes to `~/.scrollkeep/MEMORY.md`
-- **Persist sessions** — quit and restart, conversation history is restored
+| Command      | Description          |
+|--------------|----------------------|
+| `/new`       | Start a new session  |
+| `/sessions`  | List all sessions    |
+| `/help`      | Show help            |
+| `exit`/`quit`| Quit                 |
+
+### Built-in Tools
+
+| Tool | Description |
+|------|-------------|
+| `shell_exec` | Run shell commands |
+| `read_file` | Read file contents |
+| `write_file` | Write content to a file |
+| `edit_file` | Replace text in a file |
+| `save_memory` | Save a memory with title, content, and tags |
+| `search_memory` | Search memories by keyword |
+| `list_memories` | List all saved memories |
+| `delete_memory` | Delete a memory by name |
+| `web_search` | Search the web via DuckDuckGo |
+| `web_fetch` | Fetch and read a URL |
+| `delegate` | Delegate a subtask to a sub-agent |
+
+### Features
+
+- **Streaming responses** — tokens print as they arrive
+- **Tool confirmation** — prompts before executing tools
+- **Rich output** — markdown rendering with syntax highlighting
+- **Structured memory** — tagged memories with search
+- **Session persistence** — quit and restart, history is restored
+- **MCP client** — connect to external MCP servers for more tools
+- **Skills/plugins** — drop Python files in `~/.scrollkeep/skills/`
+- **Multi-agent** — delegate subtasks to independent sub-agents
 
 ### Workspace
 
@@ -45,12 +77,44 @@ Scrollkeep stores its data in `~/.scrollkeep/`:
 
 ```
 ~/.scrollkeep/
-├── SOUL.md        # System prompt (customize the agent's personality)
-├── MEMORY.md      # Persistent memory
-└── sessions/      # JSONL session logs
+├── SOUL.md            # System prompt (customize personality)
+├── mcp_servers.json   # External MCP server definitions
+├── memory/            # Structured memory files
+├── sessions/          # JSONL session logs
+└── skills/            # Custom tool plugins (.py files)
 ```
 
-## MCP Server
+### MCP Server Integration
+
+Create `~/.scrollkeep/mcp_servers.json` to connect external MCP servers:
+
+```json
+{
+  "filesystem": {
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+  }
+}
+```
+
+Tools from connected servers are namespaced (e.g., `filesystem__read_file`).
+
+### Custom Skills
+
+Drop a `.py` file in `~/.scrollkeep/skills/`:
+
+```python
+from mcp_server.tools.registry import registry
+
+@registry.tool("weather", "Get the current weather for a city")
+async def weather(city: str) -> str:
+    # your implementation here
+    return f"Weather for {city}: sunny, 72°F"
+```
+
+Skills are loaded automatically at startup.
+
+## MCP Server Mode
 
 ```bash
 python -m mcp_server.server
@@ -69,63 +133,34 @@ ruff check .
 mypy src/
 ```
 
-## Docker
-
-```bash
-docker build -t scrollkeep .
-docker run scrollkeep
-```
-
 ## Project Structure
 
 ```
 src/mcp_server/
 ├── __init__.py
-├── server.py          # MCP server entrypoint
-├── config.py          # Settings via pydantic-settings
-├── logging.py         # Structured logging setup
-├── cli.py             # CLI chat REPL
+├── server.py              # MCP server entrypoint
+├── config.py              # Settings via pydantic-settings
+├── logging.py             # Structured logging setup
+├── cli.py                 # CLI chat REPL
 ├── tools/
 │   ├── __init__.py
-│   ├── registry.py    # Tool registry with auto-schema generation
-│   └── builtins.py    # Built-in tools (shell, read, write, edit)
+│   ├── registry.py        # Tool registry with auto-schema generation
+│   ├── builtins.py        # File and shell tools
+│   ├── memory.py          # Structured memory tools
+│   ├── web.py             # Web search and fetch tools
+│   ├── delegate.py        # Sub-agent delegation tool
+│   ├── skills.py          # Plugin loader
+│   └── mcp_client.py      # External MCP server client
 ├── agent/
 │   ├── __init__.py
-│   ├── loop.py        # ReAct agent loop
-│   ├── workspace.py   # Workspace & system prompt management
-│   └── session.py     # JSONL session persistence
+│   ├── loop.py            # ReAct agent loop (standard + streaming)
+│   ├── workspace.py       # Workspace & system prompt management
+│   └── session.py         # JSONL session persistence
 └── llm/
     ├── __init__.py
-    ├── base.py        # LLMProvider protocol
-    ├── types.py       # Shared types (ToolSchema, ToolCall, LLMResponse)
-    ├── anthropic.py   # Anthropic (Claude) provider
-    ├── openai.py      # OpenAI provider
-    └── factory.py     # get_provider() factory
-```
-
-## LLM Usage
-
-```python
-from mcp_server.llm import get_provider
-
-# Uses default provider from settings
-llm = get_provider()
-
-# Or specify explicitly
-llm = get_provider("openai")
-
-# Simple completion
-result = await llm.complete(
-    messages=[{"role": "user", "content": "Summarize this text..."}],
-    model="claude-sonnet-4-20250514",
-)
-
-# Completion with tool calling
-from mcp_server.llm.types import LLMResponse
-response: LLMResponse = await llm.complete_with_tools(
-    messages=[{"role": "user", "content": "What files are here?"}],
-    model="claude-sonnet-4-20250514",
-    tools=registry.schemas(),
-    system="You are a helpful assistant.",
-)
+    ├── base.py            # LLMProvider protocol
+    ├── types.py           # Shared types (ToolSchema, ToolCall, LLMResponse)
+    ├── anthropic.py       # Anthropic provider (with streaming)
+    ├── openai.py          # OpenAI provider (with streaming)
+    └── factory.py         # get_provider() factory
 ```
