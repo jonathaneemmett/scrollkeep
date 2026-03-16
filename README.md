@@ -81,10 +81,13 @@ scrollkeep -m claude-sonnet-4-20250514 -n    # short flags
 ### Features
 
 - **Streaming responses** — tokens print as they arrive
-- **Tool confirmation** — prompts before executing tools
+- **Tool confirmation** — prompts before executing tools, with auto-approve for safe commands (ls, cat, read_file, etc.)
 - **Rich output** — markdown rendering with syntax highlighting
 - **Structured memory** — tagged memories with search
 - **Session persistence** — quit and restart, history is restored
+- **Context management** — automatically trims old messages to stay within token limits
+- **Error handling** — exponential backoff retry on rate limits and transient API errors
+- **Input history** — arrow keys, line editing, and persistent command history across sessions
 - **MCP client** — connect to external MCP servers for more tools
 - **Skills/plugins** — drop Python files in `~/.scrollkeep/skills/`
 - **Multi-agent** — delegate subtasks to independent sub-agents
@@ -97,6 +100,7 @@ Scrollkeep stores its data in `~/.scrollkeep/`:
 ~/.scrollkeep/
 ├── SOUL.md            # System prompt (customize personality)
 ├── mcp_servers.json   # External MCP server definitions
+├── input_history      # Persistent command history
 ├── memory/            # Structured memory files
 ├── sessions/          # JSONL session logs
 └── skills/            # Custom tool plugins (.py files)

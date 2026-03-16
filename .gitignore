@@ -19,3 +19,6 @@ venv/
 # OS
 .DS_Store
 
+# Docs
+ROADMAP.md
+CHANGELOG.md
