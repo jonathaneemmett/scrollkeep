@@ -1,4 +1,5 @@
 import json
+from collections.abc import AsyncIterator
 from typing import Any
 
 import openai
@@ -65,6 +66,78 @@ class OpenAIProvider:
                 )
 
         return LLMResponse(text=text, tool_calls=tool_calls)
+
+    async def stream_with_tools(
+        self,
+        messages: list[dict[str, Any]],
+        model: str,
+        tools: list[ToolSchema],
+        system: str = "",
+    ) -> AsyncIterator[LLMResponse]:
+        openai_tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": t["name"],
+                    "description": t["description"],
+                    "parameters": t["parameters"],
+                },
+            }
+            for t in tools
+        ]
+
+        openai_messages = self._convert_messages(messages, system)
+
+        stream = await self._client.chat.completions.create(
+            model=model,
+            messages=openai_messages,  # type: ignore[arg-type]
+            tools=openai_tools,  # type: ignore[arg-type]
+            stream=True,
+        )
+
+        text_parts: list[str] = []
+        tool_calls_by_index: dict[int, dict[str, Any]] = {}
+
+        async for chunk in stream:
+            delta = chunk.choices[0].delta if chunk.choices else None
+            if delta is None:
+                continue
+
+            if delta.content:
+                text_parts.append(delta.content)
+                yield LLMResponse(text=delta.content)
+
+            if delta.tool_calls:
+                for tc_delta in delta.tool_calls:
+                    idx = tc_delta.index
+                    if idx not in tool_calls_by_index:
+                        tool_calls_by_index[idx] = {
+                            "id": tc_delta.id or "",
+                            "name": "",
+                            "arguments": "",
+                        }
+                    entry = tool_calls_by_index[idx]
+                    if tc_delta.id:
+                        entry["id"] = tc_delta.id
+                    if tc_delta.function:
+                        if tc_delta.function.name:
+                            entry["name"] = tc_delta.function.name
+                        if tc_delta.function.arguments:
+                            entry["arguments"] += tc_delta.function.arguments
+
+        if tool_calls_by_index:
+            tool_calls = [
+                ToolCall(
+                    id=entry["id"],
+                    name=entry["name"],
+                    arguments=json.loads(entry["arguments"] or "{}"),
+                )
+                for entry in tool_calls_by_index.values()
+            ]
+            yield LLMResponse(
+                text="\n".join(text_parts) if text_parts else None,
+                tool_calls=tool_calls,
+            )
 
     @staticmethod
     def _convert_messages(

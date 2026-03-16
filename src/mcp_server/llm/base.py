@@ -1,3 +1,4 @@
+from collections.abc import AsyncIterator
 from typing import Any, Protocol, runtime_checkable
 
 from mcp_server.llm.types import LLMResponse, ToolSchema
@@ -14,3 +15,11 @@ class LLMProvider(Protocol):
         tools: list[ToolSchema],
         system: str = "",
     ) -> LLMResponse: ...  
+    
+    def stream_with_tools(
+        self,
+        messages: list[dict[str, Any]],
+        model: str,
+        tools: list[ToolSchema],
+        system: str = "",
+    ) -> AsyncIterator[LLMResponse]: ...
