@@ -1,15 +1,42 @@
 from __future__ import annotations
 
+import asyncio
+import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
+from mcp_server.agent.context import trim_messages
 from mcp_server.agent.session import Session
 from mcp_server.agent.workspace import Workspace
 from mcp_server.llm.base import LLMProvider
 from mcp_server.llm.types import LLMResponse
 from mcp_server.tools.registry import ToolRegistry
 
+log = logging.getLogger(__name__)
+
+MAX_RETRIES = 3
 MAX_ITERATIONS = 10
+
+
+async def _call_with_retry(coro_fn: Any, *args: Any, **kwargs: Any) -> Any:
+    """Call an async function with exponential backoff on transient errors."""
+    for attempt in range(MAX_RETRIES):
+        try:
+            return await coro_fn(*args, **kwargs)
+        except Exception as e:
+            err = str(e).lower()
+            retryable = (
+                "rate" in err
+                or "overloaded" in err
+                or "529" in err
+                or "429" in err
+            )
+            if not retryable or attempt == MAX_RETRIES - 1:
+                raise
+            wait = 2 ** (attempt + 1)
+            log.warning("Retrying in %ds: %s", wait, e)
+            await asyncio.sleep(wait)
+    raise RuntimeError("Unreachable")
 
 
 async def agent_loop(
@@ -28,7 +55,9 @@ async def agent_loop(
     session.append({"role": "user", "content": user_message})
 
     for _ in range(MAX_ITERATIONS):
-        response: LLMResponse = await provider.complete_with_tools(
+        messages = trim_messages(messages)
+        response: LLMResponse = await _call_with_retry(
+            provider.complete_with_tools,
             messages=messages,
             model=model,
             tools=tools,
@@ -92,20 +121,40 @@ async def agent_loop_streaming(
     session.append({"role": "user", "content": user_message})
 
     for _ in range(MAX_ITERATIONS):
+        messages = trim_messages(messages)
         text_parts: list[str] = []
         final_response: LLMResponse | None = None
 
-        async for chunk in provider.stream_with_tools(
-            messages=messages,
-            model=model,
-            tools=tools,
-            system=system,
-        ):
-            if chunk.is_tool_use:
-                final_response = chunk
-            elif chunk.text:
-                text_parts.append(chunk.text)
-                yield chunk.text
+        for attempt in range(MAX_RETRIES):
+            try:
+                async for chunk in provider.stream_with_tools(
+                    messages=messages,
+                    model=model,
+                    tools=tools,
+                    system=system,
+                ):
+                    if chunk.is_tool_use:
+                        final_response = chunk
+                    elif chunk.text:
+                        text_parts.append(chunk.text)
+                        yield chunk.text
+                break  # success, exit retry loop
+            except Exception as e:
+                err = str(e).lower()
+                retryable = (
+                    "rate" in err
+                    or "overloaded" in err
+                    or "529" in err
+                    or "429" in err
+                )
+                if not retryable or attempt == MAX_RETRIES - 1:
+                    yield f"\nError: {e}"
+                    return
+                wait = 2 ** (attempt + 1)
+                yield f"\n[retrying in {wait}s...]\n"
+                await asyncio.sleep(wait)
+                text_parts.clear()
+                final_response = None
 
         if final_response is None or not final_response.is_tool_use:
             text = "".join(text_parts)

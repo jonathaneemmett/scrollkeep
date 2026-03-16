@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import readline
 import sys
 from typing import Any
 
@@ -52,6 +53,12 @@ async def repl(
         await mcp_manager.connect_from_config(mcp_config, registry)
     except Exception as e:
         console.print(f"[red]Warning: MCP connection error: {e}[/red]")
+
+    # Input history
+    history_path = workspace.root / "input_history"
+    if history_path.exists():
+        readline.read_history_file(str(history_path))
+    readline.set_history_length(1000)
 
     console.print("[bold]Scrollkeep ready.[/bold] Type /help for commands.\n")
 
@@ -104,6 +111,7 @@ async def repl(
                 console.print(Markdown("".join(buffer)))
             print()
     finally:
+        readline.write_history_file(str(history_path))
         await mcp_manager.close()
 
 
@@ -164,6 +172,10 @@ def main() -> None:
 
 
 async def _confirm_tool(name: str, args: dict[str, Any]) -> bool:
+    from mcp_server.agent.approval import is_auto_approved
+    if is_auto_approved(name, args):
+        return True
+    
     summary = f"  {name}({', '.join(f'{k}={v!r}' for k, v in args.items())})"
     console.print(f"[dim]{summary}[/dim]")
     try:
