@@ -2,13 +2,25 @@
 
 A self-hosted personal AI assistant with a CLI chat interface. Scrollkeep runs a ReAct-loop agent that can execute shell commands, read/write files, search the web, remember things across sessions, connect to MCP servers, and delegate subtasks to sub-agents. Also functions as a Model Context Protocol (MCP) server.
 
-## Setup
+## Install
+
+**Global install (recommended)** — makes `scrollkeep` available anywhere in your terminal:
+
+```bash
+pipx install -e .
+```
+
+If you don't have pipx: `brew install pipx` (macOS) or `pip install pipx`.
+
+**Development install** — for working on the code:
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 ```
+
+With the dev install, run via `.venv/bin/scrollkeep` or activate the venv first.
 
 ## Configuration
 
