@@ -147,16 +147,40 @@ class AnthropicProvider:
         for msg in messages:
             role = msg["role"]
             if role == "tool_result":
-                result.append({
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": msg["tool_call_id"],
-                            "content": msg["content"],
-                        }
-                    ],
-                })
+                  content = msg["content"]
+                  # Check if this is an image result
+                  if isinstance(content, str) and content.startswith("image:"):
+                      parts = content.split(":", 2)  # ["image", "mime/type", "base64data"]
+                      result.append({
+                          "role": "user",
+                          "content": [
+                              {
+                                  "type": "tool_result",
+                                  "tool_use_id": msg["tool_call_id"],
+                                  "content": [
+                                      {
+                                          "type": "image",
+                                          "source": {
+                                              "type": "base64",
+                                              "media_type": parts[1],
+                                              "data": parts[2],
+                                          },
+                                      }
+                                  ],
+                              }
+                          ],
+                      })
+                  else:
+                      result.append({
+                          "role": "user",
+                          "content": [
+                              {
+                                  "type": "tool_result",
+                                  "tool_use_id": msg["tool_call_id"],
+                                  "content": content,
+                              }
+                          ],
+                      })
             elif role == "assistant" and "tool_calls" in msg:
                 content: list[dict[str, Any]] = []
                 if msg.get("text"):

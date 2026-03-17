@@ -18,6 +18,7 @@ from mcp_server.tools import registry
 from mcp_server.tools.delegate import configure_delegate
 from mcp_server.tools.mcp_client import MCPClientManager
 from mcp_server.tools.skills import load_skills
+from mcp_server.agent.templates import list_templates, load_template
 
 console = Console()
 
@@ -85,6 +86,47 @@ async def repl(
             if user_input.lower() == "/sessions":
                 _list_sessions(sessions_dir)
                 continue
+            if user_input.lower() == "/undo":
+                if session.undo():
+                    console.print("[dim]Last turn undone.[/dim]\n")
+                else:
+                    console.print("[dim]Nothing to undo.[/dim]\n")
+                continue
+            if user_input.lower().startswith("/export"):
+                parts = user_input.split(maxsplit=1)
+                md = session.export_markdown()
+                if len(parts) > 1:
+                    out_path = parts[1]
+                    with open(out_path, "w") as f:
+                        f.write(md)
+                    console.print(f"[dim]Exported to {out_path}[/dim]\n")
+                else:
+                    console.print(Markdown(md))
+                    print()
+                continue
+            if user_input.lower() == "/templates":
+                names = list_templates(workspace.templates_dir)
+                if names:
+                    console.print("[bold]Templates:[/bold]")
+                    for name in names:
+                        console.print(f"  {name}")
+                else:
+                    console.print("[dim]No templates found.[/dim]")
+                print()
+                continue
+            if user_input.lower().startswith("/template "):
+                parts = user_input.split(maxsplit=1)[1].split()
+                tpl_name = parts[0]
+                kwargs = {}
+                for part in parts[1:]:
+                    if "=" in part:
+                        k, _, v = part.partition("=")
+                        kwargs[k] = v
+                text = load_template(workspace.templates_dir, tpl_name, **kwargs)
+                if text is None:
+                    console.print(f"[red]Template '{tpl_name}' not found.[/red]\n")
+                    continue
+                user_input = text
             if user_input.lower() == "/help":
                 _print_help()
                 continue
@@ -206,10 +248,14 @@ def _list_sessions(sessions_dir: object) -> None:
 def _print_help() -> None:
     console.print(
         "\n[bold]Commands:[/bold]\n"
-        "  /new       Start a new session\n"
-        "  /sessions  List all sessions\n"
-        "  /help      Show this help\n"
-        "  exit       Quit\n"
+        "  /new                       Start a new session\n"
+        "  /undo                      Undo the last turn\n"
+        "  /export [path]             Export session to markdown\n"
+        "  /template <name> [k=v ...] Use a prompt template\n"
+        "  /templates                 List available templates\n"
+        "  /sessions                  List all sessions\n"
+        "  /help                      Show this help\n"
+        "  exit                       Quit\n"
     )
 
 

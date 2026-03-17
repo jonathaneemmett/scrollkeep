@@ -1,8 +1,24 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import mimetypes
 
 from mcp_server.tools.registry import registry
+
+
+@registry.tool("read_image", "read an image file and return it as a base64-encoded data.")
+async def read_image(path:str) -> str:
+    try:
+        with open(path, "rb") as f:
+            data = f.read()
+    except FileNotFoundError:
+        return f"Error: file '{path}' not found"
+    mime, _ = mimetypes.guess_type(path)
+    if mime not in ("image/png", "image/jpeg", "image/gif", "image/webp"):
+        return f"Error: unsupported image type"
+    encoded = base64.b64encode(data).decode("ascii")
+    return f"image:{mime}:{encoded}"
 
 
 @registry.tool("shell_exec", "Execute a shell command and return the output.")

@@ -42,6 +42,7 @@ class Workspace:
         if not soul.exists():
             soul.write_text(DEFAULT_SOUL)
         self.skills_dir.mkdir(parents=True, exist_ok=True)
+        self.templates_dir.mkdir(parents=True, exist_ok=True)
 
     def system_prompt(self) -> str:
         parts: list[str] = []
@@ -85,6 +86,10 @@ class Workspace:
     @property
     def skills_dir(self) -> Path:
         return self.root / "skills"
+
+    @property
+    def templates_dir(self) -> Path:
+        return self.root / "templates"
 
     @property
     def memory_path(self) -> Path:

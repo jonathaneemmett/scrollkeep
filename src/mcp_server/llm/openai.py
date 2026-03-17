@@ -151,11 +151,27 @@ class OpenAIProvider:
         for msg in messages:
             role = msg["role"]
             if role == "tool_result":
-                result.append({
-                    "role": "tool",
-                    "tool_call_id": msg["tool_call_id"],
-                    "content": msg["content"],
-                })
+                  content = msg["content"]
+                  if isinstance(content, str) and content.startswith("image:"):
+                      parts = content.split(":", 2)
+                      result.append({
+                          "role": "tool",
+                          "tool_call_id": msg["tool_call_id"],
+                          "content": [
+                              {
+                                  "type": "image_url",
+                                  "image_url": {
+                                      "url": f"data:{parts[1]};base64,{parts[2]}",
+                                  },
+                              }
+                          ],
+                      })
+                  else:
+                      result.append({
+                          "role": "tool",
+                          "tool_call_id": msg["tool_call_id"],
+                          "content": content,
+                      })
             elif role == "assistant" and "tool_calls" in msg:
                 openai_msg: dict[str, Any] = {
                     "role": "assistant",
