@@ -19,18 +19,37 @@ from mcp_server.tools.delegate import configure_delegate
 from mcp_server.tools.mcp_client import MCPClientManager
 from mcp_server.tools.skills import load_skills
 from mcp_server.agent.templates import list_templates, load_template
+from importlib.metadata import version
 
 console = Console()
 
+def _completer(text:str, state: int) -> str | None:
+    commands = [
+        "/new",
+        "/undo",
+        "/export",
+        "/template",
+        "/templates",
+        "/sessions",
+        "/help",
+        "exit",
+        "quit",
+    ]
+    matches = [cmd for cmd in commands if cmd.startswith(text)]
+    if state < len(matches):
+        return matches[state]
+    return None
 
 async def repl(
     model: str | None = None,
     provider_name: str | None = None,
     new_session: bool = False,
+    max_tokens: int | None = None,
 ) -> None:
     settings = get_settings()
     provider = get_provider(provider_name)
     active_model = model or settings.default_model
+    active_max_tokens = max_tokens or settings.max_tokens
     workspace = Workspace(path=settings.workspace_dir)
     sessions_dir = workspace.root / "sessions"
 
@@ -40,7 +59,7 @@ async def repl(
         session = Session.latest(sessions_dir) or Session.create(sessions_dir)
 
     # Configure delegate tool
-    configure_delegate(provider, active_model, workspace, registry)
+    configure_delegate(provider, active_model, workspace, registry, max_tokens=active_max_tokens)
 
     # Load user skills
     loaded = load_skills(workspace.skills_dir)
@@ -60,6 +79,8 @@ async def repl(
     if history_path.exists():
         readline.read_history_file(str(history_path))
     readline.set_history_length(1000)
+    readline.set_completer(_completer)
+    readline.parse_and_bind("tab: complete")
 
     console.print("[bold]Scrollkeep ready.[/bold] Type /help for commands.\n")
 
@@ -182,6 +203,7 @@ def _update() -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Scrollkeep AI assistant")
+    parser.add_argument("--version", "-V", action="version", version=f"scrollkeep {version('mcp-server')}")
     parser.add_argument(
         "command", nargs="?", default=None, help="Subcommand (e.g. update)"
     )
@@ -190,6 +212,8 @@ def main() -> None:
     parser.add_argument(
         "--new", "-n", action="store_true", help="Start a new session"
     )
+    parser.add_argument("--max-tokens", type=int, help="Max response tokens")
+
     args = parser.parse_args()
 
     if args.command == "update":

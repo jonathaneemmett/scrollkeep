@@ -46,6 +46,7 @@ async def agent_loop(
     workspace: Workspace,
     session: Session,
     registry: ToolRegistry,
+    max_tokens: int = 4096,
 ) -> str:
     messages = session.load()
     system = workspace.system_prompt()
@@ -62,6 +63,7 @@ async def agent_loop(
             model=model,
             tools=tools,
             system=system,
+            max_tokens=max_tokens,
         )
 
         if not response.is_tool_use:
@@ -112,6 +114,7 @@ async def agent_loop_streaming(
     session: Session,
     registry: ToolRegistry,
     confirm: ConfirmFn | None = None,
+    max_tokens: int = 4096,
 ) -> AsyncIterator[str]:
     messages = session.load()
     system = workspace.system_prompt()
@@ -132,6 +135,7 @@ async def agent_loop_streaming(
                     model=model,
                     tools=tools,
                     system=system,
+                    max_tokens=max_tokens,
                 ):
                     if chunk.is_tool_use:
                         final_response = chunk
