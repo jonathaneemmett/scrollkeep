@@ -7,16 +7,19 @@ _provider: object | None = None
 _model: str = ""
 _workspace: object | None = None
 _sub_registry: object | None = None
+_max_tokens: int = 4096
 
 
 def configure_delegate(
-    provider: object, model: str, workspace: object, sub_registry: object
+    provider: object, model: str, workspace: object, sub_registry: object,
+    max_tokens: int = 4096,
 ) -> None:
-    global _provider, _model, _workspace, _sub_registry  # noqa: PLW0603
+    global _provider, _model, _workspace, _sub_registry, _max_tokens  # noqa: PLW0603
     _provider = provider
     _model = model
     _workspace = workspace
     _sub_registry = sub_registry
+    _max_tokens = max_tokens
 
 
 @registry.tool(
@@ -46,6 +49,7 @@ async def delegate(task: str) -> str:
         workspace=_workspace,  # type: ignore[arg-type]
         session=session,
         registry=_sub_registry,  # type: ignore[arg-type]
+        max_tokens=_max_tokens,
     )
 
     # Clean up temp session
