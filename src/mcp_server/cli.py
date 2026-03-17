@@ -10,6 +10,7 @@ from rich.console import Console
 from rich.markdown import Markdown
 
 from mcp_server.agent.loop import agent_loop_streaming
+from mcp_server.llm.types import Usage
 from mcp_server.agent.session import Session
 from mcp_server.agent.workspace import Workspace
 from mcp_server.config import get_settings
@@ -22,6 +23,29 @@ from mcp_server.agent.templates import list_templates, load_template
 from importlib.metadata import version
 
 console = Console()
+
+# Cost per 1M tokens: (input, output)
+COST_PER_MILLION: dict[str, tuple[float, float]] = {
+    "claude-sonnet-4-20250514": (3.0, 15.0),
+    "claude-opus-4-20250514": (15.0, 75.0),
+    "claude-haiku-3-20250307": (0.25, 1.25),
+    "gpt-4o": (2.50, 10.0),
+    "gpt-4o-mini": (0.15, 0.60),
+    "gpt-4.1": (2.0, 8.0),
+    "gpt-4.1-mini": (0.40, 1.60),
+    "gpt-4.1-nano": (0.10, 0.40),
+    "o3-mini": (1.10, 4.40),
+}
+
+
+def _format_usage(usage: Usage, model: str) -> str:
+    total_tokens = usage.input_tokens + usage.output_tokens
+    parts = [f"{total_tokens:,} tokens (in: {usage.input_tokens:,}, out: {usage.output_tokens:,})"]
+    cost_rates = COST_PER_MILLION.get(model)
+    if cost_rates:
+        cost = (usage.input_tokens * cost_rates[0] + usage.output_tokens * cost_rates[1]) / 1_000_000
+        parts.append(f"~${cost:.4f}")
+    return " | ".join(parts)
 
 def _completer(text:str, state: int) -> str | None:
     commands = [
@@ -153,6 +177,7 @@ async def repl(
                 continue
 
             buffer: list[str] = []
+            turn_usage: Usage | None = None
             async for chunk in agent_loop_streaming(
                 user_message=user_input,
                 provider=provider,
@@ -162,6 +187,9 @@ async def repl(
                 registry=registry,
                 confirm=_confirm_tool,
             ):
+                if isinstance(chunk, Usage):
+                    turn_usage = chunk
+                    continue
                 if chunk.startswith("\n[tool:"):
                     if buffer:
                         console.print(Markdown("".join(buffer)))
@@ -172,6 +200,8 @@ async def repl(
 
             if buffer:
                 console.print(Markdown("".join(buffer)))
+            if turn_usage and (turn_usage.input_tokens or turn_usage.output_tokens):
+                console.print(f"[dim]{_format_usage(turn_usage, active_model)}[/dim]")
             print()
     finally:
         readline.write_history_file(str(history_path))

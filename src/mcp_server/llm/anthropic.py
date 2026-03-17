@@ -5,7 +5,7 @@ from typing import Any
 import anthropic
 from anthropic.types import MessageParam, TextBlock, ToolUseBlock
 
-from mcp_server.llm.types import LLMResponse, ToolCall, ToolSchema
+from mcp_server.llm.types import LLMResponse, ToolCall, ToolSchema, Usage
 
 
 class AnthropicProvider:
@@ -32,6 +32,7 @@ class AnthropicProvider:
         model: str,
         tools: list[ToolSchema],
         system: str = "",
+        max_tokens: int = 4096,
     ) -> LLMResponse:
         anthropic_tools = [
             {
@@ -46,7 +47,7 @@ class AnthropicProvider:
 
         kwargs: dict[str, Any] = {
             "model": model,
-            "max_tokens": 4096,
+            "max_tokens": max_tokens,
             "messages": anthropic_messages,
             "tools": anthropic_tools,
         }
@@ -73,6 +74,10 @@ class AnthropicProvider:
         return LLMResponse(
             text="\n".join(text_parts) if text_parts else None,
             tool_calls=tool_calls,
+            usage=Usage(
+                input_tokens=response.usage.input_tokens,
+                output_tokens=response.usage.output_tokens,
+            ),
         )
 
     async def stream_with_tools(
@@ -81,6 +86,7 @@ class AnthropicProvider:
         model: str,
         tools: list[ToolSchema],
         system: str = "",
+        max_tokens: int = 4096,
     ) -> AsyncIterator[LLMResponse]:
         anthropic_tools = [
             {
@@ -95,7 +101,7 @@ class AnthropicProvider:
 
         kwargs: dict[str, Any] = {
             "model": model,
-            "max_tokens": 4096,
+            "max_tokens": max_tokens,
             "messages": anthropic_messages,
             "tools": anthropic_tools,
         }
@@ -106,6 +112,7 @@ class AnthropicProvider:
         tool_calls: list[ToolCall] = []
         current_tool: dict[str, Any] = {}
 
+        usage = Usage()
         async with self.client.messages.stream(**kwargs) as stream:
             async for event in stream:
                 if event.type == "content_block_start":
@@ -133,11 +140,23 @@ class AnthropicProvider:
                             )
                         )
                         current_tool = {}
+                elif event.type == "message_delta":
+                    if hasattr(event, "usage") and event.usage:
+                        usage.output_tokens = event.usage.output_tokens
+                elif event.type == "message_start":
+                    if hasattr(event.message, "usage") and event.message.usage:
+                        usage.input_tokens = event.message.usage.input_tokens
 
         if tool_calls:
             yield LLMResponse(
                 text="\n".join(text_parts) if text_parts else None,
                 tool_calls=tool_calls,
+                usage=usage,
+            )
+        else:
+            yield LLMResponse(
+                text="",
+                usage=usage,
             )
 
     @staticmethod

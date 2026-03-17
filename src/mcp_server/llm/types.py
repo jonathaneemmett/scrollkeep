@@ -16,9 +16,15 @@ class ToolCall:
     arguments: dict[str, Any]
 
 @dataclass
+class Usage:
+    input_tokens: int = 0
+    output_tokens: int = 0
+
+@dataclass
 class LLMResponse:
     text: str | None = None
     tool_calls: list[ToolCall] = field(default_factory=list)
+    usage: Usage = field(default_factory=Usage)
 
     @property
     def is_tool_use(self) -> bool:

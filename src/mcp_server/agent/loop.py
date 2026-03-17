@@ -9,7 +9,7 @@ from mcp_server.agent.context import trim_messages
 from mcp_server.agent.session import Session
 from mcp_server.agent.workspace import Workspace
 from mcp_server.llm.base import LLMProvider
-from mcp_server.llm.types import LLMResponse
+from mcp_server.llm.types import LLMResponse, Usage
 from mcp_server.tools.registry import ToolRegistry
 
 log = logging.getLogger(__name__)
@@ -115,13 +115,15 @@ async def agent_loop_streaming(
     registry: ToolRegistry,
     confirm: ConfirmFn | None = None,
     max_tokens: int = 4096,
-) -> AsyncIterator[str]:
+) -> AsyncIterator[str | Usage]:
     messages = session.load()
     system = workspace.system_prompt()
     tools = registry.schemas()
 
     messages.append({"role": "user", "content": user_message})
     session.append({"role": "user", "content": user_message})
+
+    total_usage = Usage()
 
     for _ in range(MAX_ITERATIONS):
         messages = trim_messages(messages)
@@ -142,6 +144,9 @@ async def agent_loop_streaming(
                     elif chunk.text:
                         text_parts.append(chunk.text)
                         yield chunk.text
+                    if chunk.usage.input_tokens or chunk.usage.output_tokens:
+                        total_usage.input_tokens += chunk.usage.input_tokens
+                        total_usage.output_tokens += chunk.usage.output_tokens
                 break  # success, exit retry loop
             except Exception as e:
                 err = str(e).lower()
@@ -165,6 +170,7 @@ async def agent_loop_streaming(
             text_msg = {"role": "assistant", "content": text}
             messages.append(text_msg)
             session.append(text_msg)
+            yield total_usage
             return
 
         # Tool use turn
@@ -197,4 +203,5 @@ async def agent_loop_streaming(
             messages.append(tool_msg)
             session.append(tool_msg)
 
+    yield total_usage
     yield "\nError: max iterations reached"

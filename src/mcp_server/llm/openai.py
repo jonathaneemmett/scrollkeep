@@ -4,7 +4,7 @@ from typing import Any
 
 import openai
 
-from mcp_server.llm.types import LLMResponse, ToolCall, ToolSchema
+from mcp_server.llm.types import LLMResponse, ToolCall, ToolSchema, Usage
 
 
 class OpenAIProvider:
@@ -29,6 +29,7 @@ class OpenAIProvider:
         model: str,
         tools: list[ToolSchema],
         system: str = "",
+        max_tokens: int = 4096,
     ) -> LLMResponse:
         openai_tools = [
             {
@@ -48,6 +49,7 @@ class OpenAIProvider:
             model=model,
             messages=openai_messages,  # type: ignore[arg-type]
             tools=openai_tools,  # type: ignore[arg-type]
+            max_tokens=max_tokens,
         )
 
         choice = response.choices[0].message
@@ -65,7 +67,12 @@ class OpenAIProvider:
                     )
                 )
 
-        return LLMResponse(text=text, tool_calls=tool_calls)
+        usage = Usage()
+        if response.usage:
+            usage.input_tokens = response.usage.prompt_tokens
+            usage.output_tokens = response.usage.completion_tokens
+
+        return LLMResponse(text=text, tool_calls=tool_calls, usage=usage)
 
     async def stream_with_tools(
         self,
@@ -73,6 +80,7 @@ class OpenAIProvider:
         model: str,
         tools: list[ToolSchema],
         system: str = "",
+        max_tokens: int = 4096,
     ) -> AsyncIterator[LLMResponse]:
         openai_tools = [
             {
@@ -92,13 +100,19 @@ class OpenAIProvider:
             model=model,
             messages=openai_messages,  # type: ignore[arg-type]
             tools=openai_tools,  # type: ignore[arg-type]
+            max_tokens=max_tokens,
             stream=True,
+            stream_options={"include_usage": True},
         )
 
         text_parts: list[str] = []
         tool_calls_by_index: dict[int, dict[str, Any]] = {}
+        usage = Usage()
 
         async for chunk in stream:  # type: ignore[union-attr]
+            if chunk.usage:
+                usage.input_tokens = chunk.usage.prompt_tokens
+                usage.output_tokens = chunk.usage.completion_tokens
             delta = chunk.choices[0].delta if chunk.choices else None
             if delta is None:
                 continue
@@ -137,6 +151,12 @@ class OpenAIProvider:
             yield LLMResponse(
                 text="\n".join(text_parts) if text_parts else None,
                 tool_calls=tool_calls,
+                usage=usage,
+            )
+        else:
+            yield LLMResponse(
+                text="",
+                usage=usage,
             )
 
     @staticmethod
