@@ -2,12 +2,17 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import readline
 import sys
 from typing import Any
 
 from rich.console import Console
 from rich.markdown import Markdown
+from rich.status import Status
+
+from prompt_toolkit import PromptSession
+from prompt_toolkit.history import FileHistory
+from prompt_toolkit.completion import WordCompleter
+from prompt_toolkit.formatted_text import HTML
 
 from mcp_server.agent.loop import agent_loop_streaming
 from mcp_server.llm.types import Usage
@@ -47,22 +52,60 @@ def _format_usage(usage: Usage, model: str) -> str:
         parts.append(f"~${cost:.4f}")
     return " | ".join(parts)
 
-def _completer(text:str, state: int) -> str | None:
-    commands = [
-        "/new",
-        "/undo",
-        "/export",
-        "/template",
-        "/templates",
-        "/sessions",
-        "/help",
-        "exit",
-        "quit",
-    ]
-    matches = [cmd for cmd in commands if cmd.startswith(text)]
-    if state < len(matches):
-        return matches[state]
-    return None
+
+def _format_tool_summary(name: str, args: dict[str, Any]) -> str:
+    path = args.get("path") or args.get("file_path") or ""
+    content = args.get("content") or args.get("new_string") or ""
+
+    if name in ("write_file", "create_file"):
+        detail = f"to {path}" if path else ""
+        if content:
+            detail += f" ({len(content):,} chars)"
+        return f"Write {detail}".strip()
+
+    if name in ("edit_file", "edit"):
+        old = args.get("old_string", "")
+        detail = f"in {path}" if path else ""
+        if old:
+            detail += f" ({len(old):,} → {len(content):,} chars)"
+        return f"Edit {detail}".strip()
+
+    if name in ("read_file",):
+        detail = f"from {path}" if path else ""
+        offset = args.get("offset")
+        limit = args.get("limit")
+        if offset and limit:
+            detail = f"lines {offset}-{offset + limit - 1} of {path}"
+        return f"Read {detail}".strip()
+
+    if name in ("shell_exec", "shell"):
+        cmd = args.get("command", "")
+        if len(cmd) > 80:
+            cmd = cmd[:77] + "…"
+        return f"Shell: {cmd}"
+
+    if name in ("web_search",):
+        return f'Search for "{args.get("query", "")}"'
+
+    if name in ("web_fetch",):
+        return f'Fetch {args.get("url", "")}'
+
+    if name in ("delegate",):
+        task = args.get("task", "")
+        if len(task) > 80:
+            task = task[:77] + "…"
+        return f"Delegate: {task}"
+
+    # Fallback: tool name + short arg summary
+    parts = []
+    for k, v in args.items():
+        sv = str(v)
+        if len(sv) > 60:
+            sv = sv[:57] + "…"
+        parts.append(f"{k}={sv}")
+    detail = ", ".join(parts)
+    return f"{name}({detail})" if detail else name
+
 
 async def repl(
     model: str | None = None,
@@ -100,18 +143,15 @@ async def repl(
 
     # Input history
     history_path = workspace.root / "input_history"
-    if history_path.exists():
-        readline.read_history_file(str(history_path))
-    readline.set_history_length(1000)
-    readline.set_completer(_completer)
-    readline.parse_and_bind("tab: complete")
+    command_completer = WordCompleter(["/new", "/clear", "/undo", "/export", "/sessions", "/templates", "/template", "/help", "exit", "quit"], sentence=True)
+    prompt_session = PromptSession(history=FileHistory(str(history_path)), completer=command_completer)
 
     console.print("[bold]Scrollkeep ready.[/bold] Type /help for commands.\n")
 
     try:
         while True:
             try:
-                user_input = input("you> ").strip()
+                user_input = (await prompt_session.prompt_async(HTML("<b><ansibrightcyan>&gt;</ansibrightcyan></b> "))).strip()
             except (EOFError, KeyboardInterrupt):
                 print("\nBye!")
                 break
@@ -127,6 +167,11 @@ async def repl(
                 console.print(
                     f"Started new session: [dim]{session.path.stem}[/dim]\n"
                 )
+                continue
+            if user_input.lower() == "/clear":
+                session = Session.create(sessions_dir)
+                print("\033[2J\033[H", end="", flush=True)
+                console.print("[bold]Scrollkeep ready.[/bold] Type /help for commands.\n")
                 continue
             if user_input.lower() == "/sessions":
                 _list_sessions(sessions_dir)
@@ -176,8 +221,36 @@ async def repl(
                 _print_help()
                 continue
 
+            active_spinner: list[Status | None] = [None]
+            spinner_running: list[bool] = [False]
+
+            async def _confirm_tool(name: str, args: dict[str, Any]) -> bool:
+                from mcp_server.agent.approval import is_auto_approved
+                if is_auto_approved(name, args):
+                    return True
+
+                if active_spinner[0] and spinner_running[0]:
+                    active_spinner[0].stop()
+                    spinner_running[0] = False
+
+                console.print(f"  [bold]{_format_tool_summary(name, args)}[/bold]")
+                try:
+                    answer = (await prompt_session.prompt_async(HTML("  Allow? [Y/n] "))).strip().lower()
+                except (EOFError, KeyboardInterrupt):
+                    return False
+                finally:
+                    if active_spinner[0]:
+                        active_spinner[0].start()
+                        spinner_running[0] = True
+                return answer in ("", "y", "yes")
+
             buffer: list[str] = []
             turn_usage: Usage | None = None
+            spinner = Status("Thinking…", console=console, spinner="dots")
+            active_spinner[0] = spinner
+            spinner.start()
+            spinner_running[0] = True
+
             async for chunk in agent_loop_streaming(
                 user_message=user_input,
                 provider=provider,
@@ -191,20 +264,28 @@ async def repl(
                     turn_usage = chunk
                     continue
                 if chunk.startswith("\n[tool:"):
+                    spinner.stop()
+                    spinner_running[0] = False
                     if buffer:
                         console.print(Markdown("".join(buffer)))
                         buffer.clear()
                     console.print(f"[yellow]{chunk.strip()}[/yellow]")
+                    spinner = Status(f"{chunk.strip().strip('[]')} running…", console=console, spinner="dots")
+                    active_spinner[0] = spinner
+                    spinner.start()
+                    spinner_running[0] = True
                 else:
                     buffer.append(chunk)
 
+            spinner.stop()
+            spinner_running[0] = False
+            active_spinner[0] = None
             if buffer:
                 console.print(Markdown("".join(buffer)))
             if turn_usage and (turn_usage.input_tokens or turn_usage.output_tokens):
                 console.print(f"[dim]{_format_usage(turn_usage, active_model)}[/dim]")
             print()
     finally:
-        readline.write_history_file(str(history_path))
         await mcp_manager.close()
 
 
@@ -267,19 +348,6 @@ def main() -> None:
         sys.exit(0)
 
 
-async def _confirm_tool(name: str, args: dict[str, Any]) -> bool:
-    from mcp_server.agent.approval import is_auto_approved
-    if is_auto_approved(name, args):
-        return True
-    
-    summary = f"  {name}({', '.join(f'{k}={v!r}' for k, v in args.items())})"
-    console.print(f"[dim]{summary}[/dim]")
-    try:
-        answer = input("  Allow? [Y/n] ").strip().lower()
-    except (EOFError, KeyboardInterrupt):
-        return False
-    return answer in ("", "y", "yes")
-
 
 def _list_sessions(sessions_dir: object) -> None:
     from pathlib import Path
@@ -303,6 +371,7 @@ def _print_help() -> None:
     console.print(
         "\n[bold]Commands:[/bold]\n"
         "  /new                       Start a new session\n"
+        "  /clear                     Clear screen and context\n"
         "  /undo                      Undo the last turn\n"
         "  /export [path]             Export session to markdown\n"
         "  /template <name> [k=v ...] Use a prompt template\n"
