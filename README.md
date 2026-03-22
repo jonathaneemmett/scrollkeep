@@ -2,17 +2,60 @@
 
 A self-hosted personal AI assistant with a CLI chat interface. Scrollkeep runs a ReAct-loop agent that can execute shell commands, read/write files, search the web, remember things across sessions, connect to MCP servers, and delegate subtasks to sub-agents. Also functions as a Model Context Protocol (MCP) server.
 
-## Install
+## Quick Start
 
-**Global install (recommended)** — makes `scrollkeep` available anywhere in your terminal:
+### Prerequisites
+
+- **Python 3.11+** — check with `python3 --version`
+- **pipx** — for isolated global installs
+- **An Anthropic API key** — from [console.anthropic.com](https://console.anthropic.com)
+
+Install prerequisites on macOS:
 
 ```bash
-pipx install -e .
+brew install python@3.11 pipx
+pipx ensurepath   # add pipx bin dir to your PATH (restart your shell after)
 ```
 
-If you don't have pipx: `brew install pipx` (macOS) or `pip install pipx`.
+### Install
 
-**Development install** — for working on the code:
+```bash
+# 1. Clone the repo
+git clone https://github.com/your-org/scrollkeep.git
+cd scrollkeep
+
+# 2. Install globally (makes `scrollkeep` available anywhere)
+pipx install -e .
+
+# 3. Configure
+cp .env.example .env
+```
+
+Edit `.env` and set your API key:
+
+```
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+### Run
+
+```bash
+scrollkeep          # start (resumes latest session)
+```
+
+The first run creates `~/.scrollkeep/` automatically with all workspace directories.
+
+### Updating
+
+Since this is an editable install, code changes are picked up immediately — just `git pull`. If dependencies change:
+
+```bash
+scrollkeep update
+```
+
+### Development Install
+
+For working on the code itself (includes test/lint tooling):
 
 ```bash
 python -m venv .venv
@@ -22,19 +65,7 @@ pip install -e ".[dev]"
 
 With the dev install, run via `.venv/bin/scrollkeep` or activate the venv first.
 
-**Updating** — code changes are picked up automatically (editable install). If dependencies change:
-
-```bash
-scrollkeep update
-```
-
 ## Configuration
-
-Copy the example env file and add your API keys:
-
-```bash
-cp .env.example .env
-```
 
 | Variable             | Required | Default                      | Description                          |
 |----------------------|----------|------------------------------|--------------------------------------|
@@ -43,6 +74,8 @@ cp .env.example .env
 | `DEFAULT_PROVIDER`   | No       | `anthropic`                  | Which LLM provider to use by default |
 | `DEFAULT_MODEL`      | No       | `claude-sonnet-4-20250514` | Which model to use                   |
 | `WORKSPACE_DIR`      | No       | `~/.scrollkeep`              | Where sessions and memory are stored |
+
+Set these in the `.env` file at the project root, or export them as environment variables.
 
 ## Chat (CLI Agent)
 

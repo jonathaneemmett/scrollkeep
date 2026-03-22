@@ -1,24 +1,6 @@
-# Python
-__pycache__/
-*.py[cod]
-*.so
-*.egg-info/
-dist/
-build/
-
-# Virtual Environments
-venv/
-
-# IDE
-.vscode/
-.idea/
+# Node modules
+node_modules/
 
 # Environment Variables
 .env
 
-# OS
-.DS_Store
-
-# Docs
-ROADMAP.md
-CHANGELOG.md
