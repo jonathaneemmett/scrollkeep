@@ -331,6 +331,11 @@ def main() -> None:
         _update()
         return
 
+    if args.command == "gmail-auth":
+        from mcp_server.tools.gmail import run_oath_flow
+        asyncio.run(run_oath_flow())
+        return
+
     if args.command is not None:
         console.print(f"[red]Unknown command: {args.command}[/red]")
         sys.exit(1)

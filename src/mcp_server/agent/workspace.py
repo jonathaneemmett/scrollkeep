@@ -43,6 +43,7 @@ class Workspace:
             soul.write_text(DEFAULT_SOUL)
         self.skills_dir.mkdir(parents=True, exist_ok=True)
         self.templates_dir.mkdir(parents=True, exist_ok=True)
+        self.credentials_dir.mkdir(parents=True, exist_ok=True)
 
     def system_prompt(self) -> str:
         parts: list[str] = []
@@ -95,3 +96,7 @@ class Workspace:
     def memory_path(self) -> Path:
         """Kept for backwards compat."""
         return self.memory_dir
+    
+    @property
+    def credentials_dir(self) -> Path:
+        return self.root / "credentials"
