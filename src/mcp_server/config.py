@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     default_model: str = "claude-sonnet-4-20250514"
     max_tokens: int = 4096
     workspace_dir: str = "~/.scrollkeep"
-      
+    telegram_bot_token: SecretStr | None = None
     model_config = SettingsConfigDict(env_file=".env")
 
 

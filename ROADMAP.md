@@ -45,19 +45,25 @@ Connect to Gmail via OAuth. Summarize unread emails, search threads, draft repli
 - `tests/test_gmail.py` (NEW)
 
 ### 17. Messaging Channel Integrations
-Let users interact with Scrollkeep through WhatsApp, Telegram, Slack, Discord, and other messaging platforms instead of just the CLI.
+Let users interact with Scrollkeep through messaging platforms instead of just the CLI. Each channel is a separate async frontend that feeds messages into the same `agent_loop_streaming`.
 
-**Approach:** Each channel is a separate async frontend that feeds messages into the same `agent_loop_streaming`. Start with Telegram (simplest API, no approval process). Use long-polling or webhooks.
+**Implementation order:**
+1. **Telegram** — simplest API, no approval process, proves the channel architecture
+2. **Discord** — free bot creation, mature `discord.py` library, plugs into same pattern
+3. **Slack** — Socket Mode (no public URL needed), good for work contexts
+
+**Future channels (not in scope now):** WhatsApp (requires Meta Business approval), SMS via Twilio, Signal, iMessage.
+
+**Approach:** Build a shared channel base class/interface with Telegram first. Discord and Slack then implement the same interface. Use long-polling or webhooks per platform.
 
 **Files to create:**
-- `src/mcp_server/channels/__init__.py` (NEW)
-- `src/mcp_server/channels/telegram.py` (NEW) — Telegram Bot API via `aiohttp` (or `python-telegram-bot`)
-- `src/mcp_server/channels/slack.py` (NEW) — Slack Bot via Socket Mode
+- `src/mcp_server/channels/__init__.py` (NEW) — shared channel base class
+- `src/mcp_server/channels/telegram.py` (NEW) — Telegram Bot API via `python-telegram-bot`
 - `src/mcp_server/channels/discord.py` (NEW) — Discord bot via `discord.py`
-- `src/mcp_server/channels/whatsapp.py` (NEW) — WhatsApp Business API or Twilio
-- `src/mcp_server/cli.py` (MODIFY) — add `scrollkeep serve --channel telegram` subcommand
+- `src/mcp_server/channels/slack.py` (NEW) — Slack Bot via Socket Mode
+- `src/mcp_server/cli.py` (MODIFY) — add `scrollkeep serve --channel <name>` subcommand
 - `src/mcp_server/config.py` (MODIFY) — add channel-specific config (bot tokens, etc.)
-- `pyproject.toml` (MODIFY) — add channel deps as optional extras: `pip install scrollkeep[telegram]`
+- `pyproject.toml` (MODIFY) — add channel deps as optional extras: `pip install scrollkeep[telegram]`, `scrollkeep[discord]`, `scrollkeep[slack]`
 
 ### 18. Browser Automation
 Give the agent the ability to browse the web interactively — click, fill forms, take screenshots, extract content from JS-rendered pages.
@@ -126,3 +132,45 @@ Native macOS menu bar app, iOS app, Android app for quick access.
 - `src/mcp_server/api.py` (NEW) — FastAPI or aiohttp server exposing the agent loop as HTTP/WebSocket endpoints
 - `apps/macos/` (NEW) — menu bar app
 - `apps/mobile/` (NEW) — React Native or Flutter project
+
+### 24. Gateway API Layer
+A local HTTP/WebSocket server that acts as the central hub for all Scrollkeep interfaces. Every client — CLI, web chat, mobile apps, messaging channels — connects through the Gateway rather than directly into the agent loop.
+
+**Approach:** FastAPI + WebSocket server on localhost. Exposes endpoints for sending messages, streaming responses, managing sessions, and listing available tools. The CLI becomes just another client of the Gateway.
+
+**Files to create/modify:**
+- `src/mcp_server/gateway/__init__.py` (NEW)
+- `src/mcp_server/gateway/server.py` (NEW) — FastAPI app with HTTP + WebSocket endpoints
+- `src/mcp_server/gateway/routes.py` (NEW) — `/chat`, `/sessions`, `/tools`, `/health` endpoints
+- `src/mcp_server/gateway/ws.py` (NEW) — WebSocket handler for streaming responses
+- `src/mcp_server/cli.py` (MODIFY) — add `scrollkeep gateway` subcommand, optionally make CLI a Gateway client
+- `pyproject.toml` (MODIFY) — add `fastapi`, `uvicorn` as deps
+- `tests/test_gateway.py` (NEW)
+
+### 25. Web Chat UI
+A browser-based chat interface served from the Gateway, giving users a richer alternative to the terminal.
+
+**Approach:** Lightweight frontend (vanilla JS or Preact) served as static files from the Gateway. Connects via WebSocket for streaming. Renders markdown, shows tool activity, and supports session switching.
+
+**Files to create:**
+- `src/mcp_server/gateway/static/` (NEW) — HTML, CSS, JS for the web chat
+- `src/mcp_server/gateway/server.py` (MODIFY) — mount static files, add CORS
+
+### 26. System Notifications
+Let the agent push native OS notifications to the user — for proactive alerts, task completions, or reminders.
+
+**Approach:** Expose a `system_notify` tool the agent can call. On macOS use `osascript` or `terminal-notifier`. On Linux use `notify-send`. Pairs with the scheduler (#22) for proactive use.
+
+**Files to create/modify:**
+- `src/mcp_server/tools/notify.py` (NEW) — `system_notify` tool, platform-detected
+- `src/mcp_server/tools/__init__.py` (MODIFY) — import notify module
+- `tests/test_notify.py` (NEW)
+
+### 27. Control Dashboard
+A web UI for managing Scrollkeep — view connected channels, configure skills, monitor sessions, check Gateway health.
+
+**Approach:** Served from the Gateway alongside the web chat. Reads status from Gateway internals and `~/.scrollkeep/` state. Start simple: health check, active sessions list, installed skills, connected MCP servers.
+
+**Files to create:**
+- `src/mcp_server/gateway/dashboard/` (NEW) — HTML/JS dashboard UI
+- `src/mcp_server/gateway/routes.py` (MODIFY) — add `/dashboard` and status API endpoints

@@ -27,6 +27,9 @@ gmail = [
     "google-auth-oauthlib>=1.0",                                                                          
     "google-auth-httplib2>=0.2",
 ]
+telegram = [
+    "python-telegram-bot>=21.0"
+]
 
 [project.scripts]
 scrollkeep = "mcp_server.cli:main"
