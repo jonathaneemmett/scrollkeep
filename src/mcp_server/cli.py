@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import signal
 import sys
 from typing import Any
 
@@ -312,6 +313,34 @@ def _update() -> None:
         )
 
 
+async def _serve(channel_name: str) -> None:
+    if channel_name == "telegram":
+        from mcp_server.channels.telegram import (
+            TelegramChannel,
+        )
+        channel = TelegramChannel()
+    else:
+        console.print(
+            f"[red]Unknown channel: {channel_name}[/red]"
+        )
+        sys.exit(1)
+
+    loop = asyncio.get_running_loop()
+    loop.add_signal_handler(
+        signal.SIGINT,
+        lambda: asyncio.ensure_future(channel.stop()),
+    )
+    loop.add_signal_handler(
+        signal.SIGTERM,
+        lambda: asyncio.ensure_future(channel.stop()),
+    )
+
+    try:
+        await channel.start()
+    finally:
+        await channel.stop()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Scrollkeep AI assistant")
     parser.add_argument("--version", "-V", action="version", version=f"scrollkeep {version('mcp-server')}")
@@ -324,6 +353,10 @@ def main() -> None:
         "--new", "-n", action="store_true", help="Start a new session"
     )
     parser.add_argument("--max-tokens", type=int, help="Max response tokens")
+    parser.add_argument(
+        "--channel", "-c",
+        help="Channel to serve (e.g. telegram)",
+    )
 
     args = parser.parse_args()
 
@@ -334,6 +367,13 @@ def main() -> None:
     if args.command == "gmail-auth":
         from mcp_server.tools.gmail import run_oath_flow
         asyncio.run(run_oath_flow())
+        return
+
+    if args.command == "serve":
+        if not args.channel:
+            console.print("[red]Error: --channel is required for serve command[/red]")
+            sys.exit(1)
+        asyncio.run(_serve(args.channel))
         return
 
     if args.command is not None:

@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     max_tokens: int = 4096
     workspace_dir: str = "~/.scrollkeep"
     telegram_bot_token: SecretStr | None = None
+    telegram_webhook_url: str | None = None
+    telegram_webhook_port: int = 8443
+    telegram_allowed_chat_ids: list[int] = []
     model_config = SettingsConfigDict(env_file=".env")
 
 
