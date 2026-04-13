@@ -96,7 +96,7 @@ On the machine running Docker:
 2. Select your OS and architecture (e.g., **macOS**, **ARM64**)
 3. Follow the provided commands to download and configure the runner
 
-Install it as a service so it survives reboots:
+Install it as a service so it survives reboots (do not use `sudo` on macOS):
 
 ```bash
 cd actions-runner
