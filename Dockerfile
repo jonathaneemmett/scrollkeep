@@ -19,4 +19,4 @@ USER appuser
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
     CMD python -c "import mcp_server" || exit 1
 
-CMD ["python", "-m", "mcp_server.server"]
+CMD ["scrollkeep", "serve", "--channel", "telegram"]
