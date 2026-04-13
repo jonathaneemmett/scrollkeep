@@ -1,33 +1,22 @@
 # Scrollkeep
 
-A self-hosted personal AI assistant with a CLI chat interface. Scrollkeep runs a ReAct-loop agent that can execute shell commands, read/write files, search the web, remember things across sessions, connect to MCP servers, and delegate subtasks to sub-agents. Also functions as a Model Context Protocol (MCP) server.
+A self-hosted personal AI assistant. Scrollkeep runs a ReAct-loop agent that can execute shell commands, read/write files, search the web, remember things across sessions, connect to MCP servers, and delegate subtasks to sub-agents. Connects to messaging channels (Telegram) and also functions as a Model Context Protocol (MCP) server.
 
 ## Quick Start
 
 ### Prerequisites
 
-- **Python 3.11+** — check with `python3 --version`
-- **pipx** — for isolated global installs
+- **Docker** — [Install Docker Desktop](https://www.docker.com/products/docker-desktop/)
 - **An Anthropic API key** — from [console.anthropic.com](https://console.anthropic.com)
-
-Install prerequisites on macOS:
-
-```bash
-brew install python@3.11 pipx
-pipx ensurepath   # add pipx bin dir to your PATH (restart your shell after)
-```
 
 ### Install
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/your-org/scrollkeep.git
+git clone https://github.com/jonathaneemmett/scrollkeep.git
 cd scrollkeep
 
-# 2. Install globally (makes `scrollkeep` available anywhere)
-pipx install -e .
-
-# 3. Configure
+# 2. Configure
 cp .env.example .env
 ```
 
@@ -37,33 +26,115 @@ Edit `.env` and set your API key:
 ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-### Run
+### Build
 
 ```bash
-scrollkeep          # start (resumes latest session)
+docker build -t scrollkeep .
+```
+
+### Run
+
+Start the Telegram channel listener (default):
+
+```bash
+docker run -d \
+  --restart unless-stopped \
+  --env-file .env \
+  -v ~/.scrollkeep:/home/appuser/.scrollkeep \
+  --name scrollkeep \
+  scrollkeep
+```
+
+Start an interactive CLI chat session:
+
+```bash
+docker run -it \
+  --env-file .env \
+  -v ~/.scrollkeep:/home/appuser/.scrollkeep \
+  scrollkeep scrollkeep
 ```
 
 The first run creates `~/.scrollkeep/` automatically with all workspace directories.
 
 ### Updating
 
-Since this is an editable install, code changes are picked up immediately — just `git pull`. If dependencies change:
+Rebuild the container after pulling changes:
 
 ```bash
-scrollkeep update
+git pull
+docker stop scrollkeep && docker rm scrollkeep
+docker build -t scrollkeep .
+docker run -d \
+  --restart unless-stopped \
+  --env-file .env \
+  -v ~/.scrollkeep:/home/appuser/.scrollkeep \
+  --name scrollkeep \
+  scrollkeep
 ```
 
-### Development Install
+Or set up automatic deploys — see [Auto-Deploy with GitHub Actions](#auto-deploy-with-github-actions).
 
-For working on the code itself (includes test/lint tooling):
+### Container Management
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
+docker ps                  # check status
+docker logs scrollkeep     # view logs
+docker logs -f scrollkeep  # follow logs
+docker restart scrollkeep  # restart
+docker stop scrollkeep     # stop
 ```
 
-With the dev install, run via `.venv/bin/scrollkeep` or activate the venv first.
+## Auto-Deploy with GitHub Actions
+
+Automatically rebuild and restart the container on every push to `main` using a self-hosted GitHub Actions runner.
+
+### 1. Install the Runner
+
+On the machine running Docker:
+
+1. Go to your repo on GitHub: **Settings > Actions > Runners > New self-hosted runner**
+2. Select your OS and architecture (e.g., **macOS**, **ARM64**)
+3. Follow the provided commands to download and configure the runner
+
+Install it as a service so it survives reboots:
+
+```bash
+cd actions-runner
+./svc.sh install
+./svc.sh start
+```
+
+### 2. Add the Workflow
+
+Create `.github/workflows/deploy.yml`:
+
+```yaml
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rebuild and restart container
+        run: |
+          docker stop scrollkeep || true
+          docker rm scrollkeep || true
+          docker build -t scrollkeep .
+          docker run -d \
+            --restart unless-stopped \
+            --env-file .env \
+            -v ~/.scrollkeep:/home/appuser/.scrollkeep \
+            --name scrollkeep \
+            scrollkeep
+```
+
+Now every push to `main` will automatically rebuild and redeploy the container.
 
 ## Configuration
 
@@ -74,16 +145,16 @@ With the dev install, run via `.venv/bin/scrollkeep` or activate the venv first.
 | `DEFAULT_PROVIDER`   | No       | `anthropic`                  | Which LLM provider to use by default |
 | `DEFAULT_MODEL`      | No       | `claude-sonnet-4-20250514` | Which model to use                   |
 | `WORKSPACE_DIR`      | No       | `~/.scrollkeep`              | Where sessions and memory are stored |
+| `TELEGRAM_BOT_TOKEN` | No       | —                            | Telegram bot token for channel mode  |
 
 Set these in the `.env` file at the project root, or export them as environment variables.
 
 ## Chat (CLI Agent)
 
 ```bash
-scrollkeep                          # resume latest session
-scrollkeep --new                    # start fresh session
-scrollkeep --model gpt-4o --provider openai  # use OpenAI
-scrollkeep -m claude-sonnet-4-20250514 -n    # short flags
+docker run -it --env-file .env -v ~/.scrollkeep:/home/appuser/.scrollkeep scrollkeep scrollkeep
+docker run -it --env-file .env -v ~/.scrollkeep:/home/appuser/.scrollkeep scrollkeep scrollkeep --new     # fresh session
+docker run -it --env-file .env -v ~/.scrollkeep:/home/appuser/.scrollkeep scrollkeep scrollkeep -m gpt-4o -p openai  # use OpenAI
 ```
 
 ### REPL Commands
@@ -124,10 +195,11 @@ scrollkeep -m claude-sonnet-4-20250514 -n    # short flags
 - **MCP client** — connect to external MCP servers for more tools
 - **Skills/plugins** — drop Python files in `~/.scrollkeep/skills/`
 - **Multi-agent** — delegate subtasks to independent sub-agents
+- **Telegram integration** — receive and respond to messages via Telegram bot
 
 ### Workspace
 
-Scrollkeep stores its data in `~/.scrollkeep/`:
+Scrollkeep stores its data in `~/.scrollkeep/` (mounted as a Docker volume):
 
 ```
 ~/.scrollkeep/
@@ -169,19 +241,23 @@ async def weather(city: str) -> str:
 
 Skills are loaded automatically at startup.
 
-## MCP Server Mode
+## Development
+
+For working on the code itself:
 
 ```bash
-python -m mcp_server.server
+python -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
 ```
 
-## Test
+### Test
 
 ```bash
 pytest
 ```
 
-## Lint & Type Check
+### Lint & Type Check
 
 ```bash
 ruff check .
@@ -197,6 +273,9 @@ src/mcp_server/
 ├── config.py              # Settings via pydantic-settings
 ├── logging.py             # Structured logging setup
 ├── cli.py                 # CLI chat REPL
+├── channels/
+│   ├── __init__.py
+│   └── telegram.py        # Telegram bot channel
 ├── tools/
 │   ├── __init__.py
 │   ├── registry.py        # Tool registry with auto-schema generation
