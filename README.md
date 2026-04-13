@@ -104,9 +104,23 @@ cd actions-runner
 ./svc.sh start
 ```
 
-### 2. Add the Workflow
+### 2. Add Secrets
 
-Create `.github/workflows/deploy.yml`:
+Go to your repo on GitHub: **Settings > Secrets and variables > Actions > Secrets tab > New repository secret**
+
+Add the following secrets:
+
+| Secret | Description |
+|--------|-------------|
+| `ANTHROPIC_API_KEY` | Anthropic API key |
+| `OPENAI_API_KEY` | OpenAI API key (if using OpenAI) |
+| `DEFAULT_PROVIDER` | LLM provider (`anthropic` or `openai`) |
+| `DEFAULT_MODEL` | Model name |
+| `WORKSPACE_DIR` | Workspace path (e.g., `~/.scrollkeep`) |
+
+### 3. Add the Workflow
+
+The workflow at `.github/workflows/deploy.yml` is already included in the repo. It pulls secrets into the container as environment variables:
 
 ```yaml
 name: Deploy
@@ -122,13 +136,23 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Rebuild and restart container
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DEFAULT_PROVIDER: ${{ secrets.DEFAULT_PROVIDER }}
+          DEFAULT_MODEL: ${{ secrets.DEFAULT_MODEL }}
+          WORKSPACE_DIR: ${{ secrets.WORKSPACE_DIR }}
         run: |
           docker stop scrollkeep || true
           docker rm scrollkeep || true
           docker build -t scrollkeep .
           docker run -d \
             --restart unless-stopped \
-            --env-file .env \
+            -e ANTHROPIC_API_KEY \
+            -e OPENAI_API_KEY \
+            -e DEFAULT_PROVIDER \
+            -e DEFAULT_MODEL \
+            -e WORKSPACE_DIR \
             -v ~/.scrollkeep:/home/appuser/.scrollkeep \
             --name scrollkeep \
             scrollkeep
