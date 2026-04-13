@@ -40,7 +40,13 @@ def _get_service():
     
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
+            try:
+                creds.refresh(Request())
+            except Exception as e:
+                raise RuntimeError(
+                    f"Gmail token refresh failed: {e}. "
+                    "Run `scrollkeep gmail-auth` to re-authenticate."
+                ) from e
         else:
             if not client_secret_path.exists():
                 raise FileNotFoundError(

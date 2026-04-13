@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+log = logging.getLogger(__name__)
 
 
 class Session:
@@ -14,14 +17,20 @@ class Session:
         if not self.path.exists():
             return []
         messages: list[dict[str, Any]] = []
-        for line in self.path.read_text().splitlines():
+        for i, line in enumerate(self.path.read_text().splitlines(), 1):
             if line.strip():
-                messages.append(json.loads(line))
+                try:
+                    messages.append(json.loads(line))
+                except json.JSONDecodeError:
+                    log.warning(
+                        "Skipping corrupt line %d in session %s", i, self.path.name
+                    )
         return messages
 
     def append(self, message: dict[str, Any]) -> None:
         with open(self.path, "a") as f:
             f.write(json.dumps(message) + "\n")
+            f.flush()
 
     def undo(self) -> bool:
         """Remove the last user turn and all assistant/tool messages that followed it."""
@@ -38,10 +47,17 @@ class Session:
             return False
         # Keep everything before that user message
         messages = messages[:last_user]
-        # Rewrite the file
-        with open(self.path, "w") as f:
-            for msg in messages:
-                f.write(json.dumps(msg) + "\n")
+        # Atomic rewrite via temp file to avoid corruption on crash
+        tmp = self.path.with_suffix(".tmp")
+        try:
+            with open(tmp, "w") as f:
+                for msg in messages:
+                    f.write(json.dumps(msg) + "\n")
+                f.flush()
+            tmp.replace(self.path)
+        except OSError:
+            tmp.unlink(missing_ok=True)
+            raise
         return True
 
     def export_markdown(self) -> str:

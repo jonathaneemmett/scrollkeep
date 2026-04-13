@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import mimetypes
+from pathlib import Path
 
 from mcp_server.tools.registry import registry
 
@@ -47,9 +48,10 @@ async def read_file(path: str) -> str:
         return f"Error: file '{path}' not found"
 
 @registry.tool("write_file", "Write content to a file.")
-async def write_file(path: str, content: str) -> str: 
-    with open(path, "w") as f:
-        f.write(content)
+async def write_file(path: str, content: str) -> str:
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(content)
     return f"Wrote {len(content)} characters to '{path}'"
 
 @registry.tool("edit_file", "Replace text in a file")

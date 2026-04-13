@@ -51,8 +51,19 @@ async def save_memory(title: str, content: str, tags: str = "") -> str:
     d = _get_memory_dir()
     slug = _slugify(title)
     timestamp = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    # Find a filename that doesn't collide with a different title
     filename = f"{slug}.md"
     path = d / filename
+    counter = 1
+    while path.exists():
+        existing = path.read_text()
+        meta, _ = _parse_frontmatter(existing)
+        if meta.get("title") == title:
+            break  # same title — intentional overwrite/update
+        filename = f"{slug}_{counter}.md"
+        path = d / filename
+        counter += 1
 
     frontmatter = f"---\ntitle: {title}\ntags: {tags}\ndate: {timestamp}\n---\n\n"
     path.write_text(frontmatter + content)

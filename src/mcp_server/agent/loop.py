@@ -56,7 +56,7 @@ async def agent_loop(
     session.append({"role": "user", "content": user_message})
 
     for _ in range(MAX_ITERATIONS):
-        messages = trim_messages(messages)
+        messages = trim_messages(messages, system_prompt=system)
         response: LLMResponse = await _call_with_retry(
             provider.complete_with_tools,
             messages=messages,
@@ -126,7 +126,7 @@ async def agent_loop_streaming(
     total_usage = Usage()
 
     for _ in range(MAX_ITERATIONS):
-        messages = trim_messages(messages)
+        messages = trim_messages(messages, system_prompt=system)
         text_parts: list[str] = []
         final_response: LLMResponse | None = None
 

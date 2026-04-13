@@ -38,7 +38,9 @@ async def web_fetch(url: str) -> str:
         content_type = resp.headers.get("Content-Type", "")
         if "html" in content_type:
             raw = _strip_html(raw)
-        return str(raw[:10000])
+        if len(raw) > 10000:
+            return raw[:10000] + f"\n\n[Content truncated at 10,000 characters. Full length: {len(raw):,} characters.]"
+        return raw
     except urllib.error.URLError as e:
         return f"Error fetching URL: {e}"
     except Exception as e:
