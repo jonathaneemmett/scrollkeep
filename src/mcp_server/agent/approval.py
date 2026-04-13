@@ -3,7 +3,10 @@ from __future__ import annotations
 import re
 from typing import Any
 
-# Tool calls matching these patterns are auto-approved
+# Tool calls matching these patterns are auto-approved.
+# For shell_exec, the pattern must match the full command and disallows
+# shell metacharacters that enable injection (|, ;, &, $, `, <, >, newline).
+_SAFE_ARGS = r"(\s+[^|;&`$(><\n]+)?"
 DEFAULT_RULES = [
     {"tool": "read_file"},
     {"tool": "list_memories"},
@@ -11,7 +14,7 @@ DEFAULT_RULES = [
     {"tool": "web_search"},
     {"tool": "web_fetch"},
     {"tool": "shell_exec", "command":
-r"^(ls|cat|head|tail|wc|echo|pwd|whoami|date|which|env|printenv)(\s|$)"},
+        rf"^(ls|cat|head|tail|wc|echo|pwd|whoami|date|which|env|printenv){_SAFE_ARGS}$"},
 ]
 
 def is_auto_approved(

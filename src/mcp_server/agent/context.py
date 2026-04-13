@@ -21,24 +21,25 @@ def _message_tokens(msg: dict[str, Any]) -> int:
         total += estimate_tokens(str(msg["tool_calls"]))
     return total + 4 # overhead per message
 
-def trim_messages(messages: list[dict[str, Any]],
-max_tokens: int = 100_000,
-reserve: int = 8_000,
+def trim_messages(
+    messages: list[dict[str, Any]],
+    max_tokens: int = 100_000,
+    reserve: int = 8_000,
+    system_prompt: str = "",
 ) -> list[dict[str, Any]]:
     """Trim oldest messages to fit within token budget.
-    
-    Keeps the first message (initial context) and as many recent
-    messages as fit within max_tokens - reserve.
-    """
 
-    budget = max_tokens - reserve
+    Keeps the first message (initial context) and as many recent
+    messages as fit within max_tokens - reserve - system_prompt tokens.
+    """
+    budget = max_tokens - reserve - estimate_tokens(system_prompt)
     total = sum(_message_tokens(m) for m in messages)
     if total <= budget:
         return messages
-    
+
     if len(messages) <= 2:
         return messages
-    
+
     # keep first message + trim from the front of the rest
     first = messages[0]
     rest = messages[1:]

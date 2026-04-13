@@ -24,7 +24,12 @@ class MCPClientManager:
     ) -> None:
         if not config_path.exists():
             return
-        config = json.loads(config_path.read_text())
+        try:
+            config = json.loads(config_path.read_text())
+        except json.JSONDecodeError as e:
+            raise ValueError(
+                f"Invalid JSON in MCP config {config_path}: {e}"
+            ) from e
         for name, server_def in config.items():
             await self._connect_server(name, server_def, registry)
 

@@ -78,9 +78,14 @@ class TelegramChannel(Channel):
 
         await chat.send_action("typing")
 
-        response = await self.handle_message(
-            str(chat.id), msg.text
-        )
+        try:
+            response = await self.handle_message(
+                str(chat.id), msg.text
+            )
+        except Exception:
+            log.exception("Error handling message from chat %s", chat.id)
+            await msg.reply_text("An error occurred. Please try again.")
+            return
 
         for i in range(
             0, len(response), TELEGRAM_MESSAGE_LIMIT

@@ -252,35 +252,39 @@ async def repl(
             spinner.start()
             spinner_running[0] = True
 
-            async for chunk in agent_loop_streaming(
-                user_message=user_input,
-                provider=provider,
-                model=active_model,
-                workspace=workspace,
-                session=session,
-                registry=registry,
-                confirm=_confirm_tool,
-            ):
-                if isinstance(chunk, Usage):
-                    turn_usage = chunk
-                    continue
-                if chunk.startswith("\n[tool:"):
-                    spinner.stop()
-                    spinner_running[0] = False
-                    if buffer:
-                        console.print(Markdown("".join(buffer)))
-                        buffer.clear()
-                    console.print(f"[yellow]{chunk.strip()}[/yellow]")
-                    spinner = Status(f"{chunk.strip().strip('[]')} running…", console=console, spinner="dots")
-                    active_spinner[0] = spinner
-                    spinner.start()
-                    spinner_running[0] = True
-                else:
-                    buffer.append(chunk)
+            try:
+                async for chunk in agent_loop_streaming(
+                    user_message=user_input,
+                    provider=provider,
+                    model=active_model,
+                    workspace=workspace,
+                    session=session,
+                    registry=registry,
+                    confirm=_confirm_tool,
+                ):
+                    if isinstance(chunk, Usage):
+                        turn_usage = chunk
+                        continue
+                    if chunk.startswith("\n[tool:"):
+                        spinner.stop()
+                        spinner_running[0] = False
+                        if buffer:
+                            console.print(Markdown("".join(buffer)))
+                            buffer.clear()
+                        console.print(f"[yellow]{chunk.strip()}[/yellow]")
+                        spinner = Status(f"{chunk.strip().strip('[]')} running…", console=console, spinner="dots")
+                        active_spinner[0] = spinner
+                        spinner.start()
+                        spinner_running[0] = True
+                    else:
+                        buffer.append(chunk)
+            except Exception as e:
+                console.print(f"\n[red]Error: {e}[/red]")
+            finally:
+                spinner.stop()
+                spinner_running[0] = False
+                active_spinner[0] = None
 
-            spinner.stop()
-            spinner_running[0] = False
-            active_spinner[0] = None
             if buffer:
                 console.print(Markdown("".join(buffer)))
             if turn_usage and (turn_usage.input_tokens or turn_usage.output_tokens):
@@ -365,8 +369,8 @@ def main() -> None:
         return
 
     if args.command == "gmail-auth":
-        from mcp_server.tools.gmail import run_oath_flow
-        asyncio.run(run_oath_flow())
+        from mcp_server.tools.gmail import run_oauth_flow
+        asyncio.run(run_oauth_flow())
         return
 
     if args.command == "serve":
