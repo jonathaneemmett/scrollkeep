@@ -24,6 +24,7 @@ jobs:
           docker build -t scrollkeep .
           docker run -d \
             --restart unless-stopped \
+            --network host \
             -e ANTHROPIC_API_KEY \
             -e OPENAI_API_KEY \
             -e DEFAULT_PROVIDER \
