@@ -17,6 +17,7 @@ jobs:
           DEFAULT_PROVIDER: ${{ secrets.DEFAULT_PROVIDER }}
           DEFAULT_MODEL: ${{ secrets.DEFAULT_MODEL }}
           WORKSPACE_DIR: ${{ secrets.WORKSPACE_DIR }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         run: |
           docker stop scrollkeep || true
           docker rm scrollkeep || true
@@ -28,6 +29,7 @@ jobs:
             -e DEFAULT_PROVIDER \
             -e DEFAULT_MODEL \
             -e WORKSPACE_DIR \
+            -e TELEGRAM_BOT_TOKEN \
             -v ~/.scrollkeep:/home/appuser/.scrollkeep \
             --name scrollkeep \
             scrollkeep
